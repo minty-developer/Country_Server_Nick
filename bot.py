@@ -10,22 +10,22 @@ logger = logging.getLogger('bot')
 # ── Intents ──
 intents = discord.Intents.default()
 intents.members = True  # 멤버 이벤트 필수
-
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 MAX_NICK_LENGTH = 32  # Discord 닉네임 최대 길이
 
-# ── 역할 기반 닉네임 적용 함수 (가장 높은 역할만) ──
+# ── 역할 기반 닉네임 적용 함수 ──
 async def apply_roles_to_member(member):
     if member.guild.owner_id == member.id or member.bot:
         return
 
-    # @everyone 제외, 역할이 많으면 가장 높은 역할만
+    # @everyone 제외, 가장 높은 역할만
     roles = [r for r in member.roles if r.name != "@everyone"]
     if roles:
-        highest_role = max(roles, key=lambda r: r.position)  # position으로 높은 순 선택
-        new_nick = f"{member.name} [{highest_role.name}]"
+        highest_role = max(roles, key=lambda r: r.position)
+        new_nick = f"{member.display_name} [{highest_role.name}]"
     else:
-        new_nick = member.name
+        new_nick = member.display_name
 
     # 32자 제한 적용
     if len(new_nick) > MAX_NICK_LENGTH:
@@ -34,11 +34,11 @@ async def apply_roles_to_member(member):
     try:
         if member.nick != new_nick:
             await member.edit(nick=new_nick)
-            logger.info(f"Nickname set: {member} -> {new_nick}")
+            logger.info(f"Nickname set: {member.display_name} -> {new_nick}")
     except discord.Forbidden:
-        logger.warning(f"Cannot change nickname for {member} (Forbidden)")
+        logger.warning(f"Cannot change nickname for {member.display_name} (Forbidden)")
     except discord.HTTPException as e:
-        logger.error(f"HTTPException for {member}: {e}")
+        logger.error(f"HTTPException for {member.display_name}: {e}")
 
 # ── 서버 준비되면 기존 멤버 적용 ──
 @bot.event
@@ -46,6 +46,8 @@ async def on_ready():
     logger.info(f"Logged in as {bot.user}")
     for guild in bot.guilds:
         logger.info(f"Processing guild: {guild.name} ({guild.id})")
+        # 멤버 캐시 완전 로드
+        await guild.chunk()
         for member in guild.members:
             await apply_roles_to_member(member)
     logger.info("All existing members processed.")
